@@ -59,10 +59,15 @@ function providerCommand(): ProviderCommand {
 
     const command = process.env.QUOTA_MCP_COMMAND;
     if (!command) {
-        throw new Error(
-            'No local MCP provider configured. Use: quota-agent -- <command> [args...] ' +
-            'or set QUOTA_MCP_COMMAND and optional QUOTA_MCP_ARGS_JSON.'
-        );
+        return {
+            command: 'npx',
+            args: ['-y', '@wonderwhy-er/desktop-commander@0.2.50'],
+            env: {
+                npm_config_loglevel: 'error',
+                npm_config_update_notifier: 'false',
+                npm_config_fund: 'false'
+            }
+        };
     }
 
     return {

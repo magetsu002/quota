@@ -278,7 +278,7 @@ function createProtocolServer(): Server {
         },
         {
             capabilities: { tools: {} },
-            instructions: 'Quota provides authenticated remote filesystem, terminal, process, and machine tools through a self-hosted device agent.'
+            instructions: 'Quota securely exposes tools from a local MCP provider through a self-hosted relay.'
         }
     );
     server.setRequestHandler(ListToolsRequestSchema, async () => {

@@ -1,7 +1,7 @@
 {
   "name": "quota-mcp-bridge",
   "version": "0.1.0",
-  "description": "Expose any local stdio MCP server through an authenticated Streamable HTTP relay.",
+  "description": "Self-hosted remote MCP bridge for ChatGPT, Claude, and any local stdio MCP server.",
   "type": "module",
   "license": "MIT",
   "author": "magetsu002",
@@ -9,14 +9,19 @@
     "node": ">=20"
   },
   "bin": {
+    "quota": "dist/cli.js",
     "quota-relay": "dist/relay/server.js",
     "quota-agent": "dist/agent/agent.js"
   },
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc",
-    "test": "npm run build && node test/relay.test.js && node test/oauth.test.js",
-    "start:relay": "node dist/relay/server.js",
-    "start:agent": "node dist/agent/agent.js",
+    "test": "npm run build && node test/cli.test.js && node test/relay.test.js && node test/oauth.test.js",
+    "start": "node dist/cli.js start",
+    "relay": "node dist/cli.js relay",
+    "agent": "node dist/cli.js agent",
+    "status": "node dist/cli.js status",
+    "token": "node dist/cli.js token",
     "dev:relay": "tsx src/relay/server.ts",
     "dev:agent": "tsx src/agent/agent.ts"
   },
