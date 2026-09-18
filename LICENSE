@@ -1,21 +1,72 @@
-MIT License
+Quota Source-Available License 1.0
+QSAL-1.0
 
 Copyright (c) 2026 magetsu002
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Permission
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Subject to the terms below, permission is granted to any person obtaining a
+copy of this software and associated documentation files (the "Software") to
+use, copy, modify, merge, publish, distribute, sublicense, run, host, and
+create derivative works from the Software for any purpose, including
+commercial purposes.
+
+2. Source Code Must Be Free
+
+You may not charge money, require a subscription, require a purchase, require
+a donation, or require any other monetary consideration as a condition of
+receiving or accessing the Source Code of the Software.
+
+The same rule applies to Source Code of any modification or derivative work
+when that Source Code is distributed or otherwise offered to another person.
+
+"Source Code" means the preferred form of the Software or derivative work for
+making modifications.
+
+3. Paid Products and Services Are Allowed
+
+This License does not prohibit charging for:
+
+- hosting or software-as-a-service;
+- support, consulting, maintenance, or integration work;
+- hardware or other products that use the Software;
+- compiled or executable copies of the Software or a derivative work; or
+- other services or products built with or around the Software.
+
+However, no part of such a charge may be a condition for obtaining Source
+Code. If Source Code is included only inside a paid package, an equivalent
+copy of that Source Code must also be made available separately at no charge.
+
+Reasonable physical-media or shipping costs may be recovered only if the same
+Source Code is also available at no charge through a network download.
+
+4. Redistribution
+
+Any Source Code copy of the Software or a derivative work that you distribute
+must include this License and the above copyright notice.
+
+You may not remove or alter the no-charge Source Code requirement in Section 2
+for redistributed Source Code derived from the Software.
+
+5. Trademarks
+
+This License does not grant permission to use the name "Quota", project logos,
+or other project trademarks to imply endorsement or official status.
+
+6. No Warranty
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. Prior Versions
+
+Versions of the Software previously released under another license remain
+available under the license terms that accompanied those versions.
+
+This license is source-available, not an OSI-approved open-source license.

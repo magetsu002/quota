@@ -173,4 +173,10 @@ The standalone Quota agent has also been verified with Desktop Commander, exposi
 
 ## License
 
-MIT
+Quota uses the **Quota Source-Available License 1.0 (QSAL-1.0)**.
+
+You can use, modify, fork, host, and build commercial products or services with Quota. You may **not charge for access to Quota source code or derivative source code**.
+
+See [LICENSE](LICENSE) for the full terms.
+
+Historical versions keep the licenses they were originally released under.

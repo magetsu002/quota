@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Self-hosted remote MCP bridge for ChatGPT, Claude, and any local stdio MCP server.",
   "type": "module",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "magetsu002",
   "engines": {
     "node": ">=20"
