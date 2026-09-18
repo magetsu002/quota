@@ -1,51 +1,44 @@
 # Quota
 
-**Quota exposes any local stdio MCP server as an authenticated Streamable HTTP MCP endpoint.**
+[![CI](https://github.com/magetsu002/quota/actions/workflows/ci.yml/badge.svg)](https://github.com/magetsu002/quota/actions/workflows/ci.yml)
 
-It was built because a remote MCP bridge should not require a hosted monthly tool-call quota.
+## Tired of Desktop Commander limits?
+
+**Quota exposes your own local MCP tools to ChatGPT, Claude, and other MCP clients through a self-hosted relay.**
+
+No hosted remote bridge. No Quota-imposed monthly tool-call counter. Your tools keep running on **your machine**.
+
+Desktop Commander can be the provider — but it does not have to be. Quota can expose **any stdio MCP server**.
 
 ```text
+your local MCP server
+        |
+        | stdio
+        v
+   Quota agent
+        |
+        | authenticated outbound connection
+        v
+   Quota relay
+        |
+        | Streamable HTTP
+        v
 ChatGPT / Claude / MCP client
-            |
-            | Streamable HTTP
-            v
-        Quota relay
-            |
-            | authenticated outbound polling
-            v
-        Quota agent
-            |
-            | stdio MCP
-            v
-    any local MCP server
 ```
 
-Quota does **not** bundle Desktop Commander. Desktop Commander is simply one MCP provider you can run behind the agent. You can use your own MCP server instead.
+### Why Quota?
 
-## What works
+- **Keep the MCP local** — the provider runs on your own machine.
+- **Bring your own tools** — Desktop Commander, your own MCP, or anything else that speaks stdio MCP.
+- **No Quota monthly call limit** — Quota itself does not meter tool calls.
+- **Outbound-only agent** — your machine does not need an inbound port.
+- **Works with remote clients** — expose the relay through a stable HTTPS endpoint or supported secure tunnel.
 
-- Generic stdio MCP provider -> remote Streamable HTTP bridge
-- Tool discovery and tool calls
-- Separate device and MCP credentials
-- Outbound-only agent connection
-- OpenAI secure-tunnel compatibility, including the stateless `2026-07-28` discovery/list/call flow
-- Direct HTTPS OAuth mode with:
-  - Protected Resource Metadata
-  - OAuth Authorization Server Metadata
-  - Dynamic Client Registration
-  - PKCE
-  - access + refresh tokens
-  - persisted OAuth clients/tokens
-- Tool metadata sanitization so provider-specific UI resources do not break action scanning
-
-## Requirements
-
-- Node.js 20+
-- A local stdio MCP server to expose
+> Quota does not bundle, crack, or bypass Desktop Commander's hosted service. It runs a local MCP provider and exposes those tools through your own relay.
 
 ## Quick start
 
-Clone and install:
+### 1. Install
 
 ```bash
 git clone https://github.com/magetsu002/quota.git
@@ -54,14 +47,24 @@ npm install
 npm run build
 ```
 
-Generate two different secrets:
+Requirements:
+
+- Node.js 20+
+- a local stdio MCP server to expose
+
+### 2. Generate two different secrets
 
 ```bash
 export QUOTA_DEVICE_TOKEN="$(openssl rand -hex 32)"
 export QUOTA_MCP_TOKEN="$(openssl rand -hex 32)"
 ```
 
-Start the relay:
+- `QUOTA_DEVICE_TOKEN`: agent → relay
+- `QUOTA_MCP_TOKEN`: MCP client/tunnel → relay
+
+Do not reuse the same secret for both.
+
+### 3. Start the relay
 
 ```bash
 QUOTA_DEVICE_TOKEN="$QUOTA_DEVICE_TOKEN" \
@@ -69,9 +72,15 @@ QUOTA_MCP_TOKEN="$QUOTA_MCP_TOKEN" \
 npm run start:relay
 ```
 
-In another terminal, connect a local MCP provider.
+The MCP endpoint is now:
 
-### Example: Desktop Commander
+```text
+http://127.0.0.1:8787/mcp
+```
+
+### 4. Attach a local MCP provider
+
+#### Desktop Commander
 
 ```bash
 QUOTA_DEVICE_TOKEN="$QUOTA_DEVICE_TOKEN" \
@@ -79,7 +88,7 @@ QUOTA_RELAY_URL=http://127.0.0.1:8787 \
 node dist/agent/agent.js -- npx -y @wonderwhy-er/desktop-commander@0.2.50
 ```
 
-### Example: your own MCP server
+#### Your own MCP
 
 ```bash
 QUOTA_DEVICE_TOKEN="$QUOTA_DEVICE_TOKEN" \
@@ -87,31 +96,30 @@ QUOTA_RELAY_URL=http://127.0.0.1:8787 \
 node dist/agent/agent.js -- node /path/to/your-mcp-server.js
 ```
 
-The relay is now available at:
+That is the core idea:
+
+```text
+Quota does not care what your MCP does.
+If it speaks stdio MCP, the agent can expose its tools.
+```
+
+## ChatGPT
+
+For a machine that is not publicly reachable, use **OpenAI Secure MCP Tunnel** and point it at:
 
 ```text
 http://127.0.0.1:8787/mcp
 ```
 
-Clients must send:
+Inject the local Quota bearer token as the MCP authorization header:
 
 ```http
 Authorization: Bearer <QUOTA_MCP_TOKEN>
 ```
 
-## ChatGPT
+The token stays on the tunnel-client → Quota hop.
 
-For a machine that is not publicly reachable, the cleanest setup is OpenAI Secure MCP Tunnel.
-
-Point the tunnel client at:
-
-```text
-http://127.0.0.1:8787/mcp
-```
-
-and inject the local Quota bearer token as an MCP extra header. The local token stays on the tunnel-client -> Quota hop.
-
-Quota implements the modern stateless calls currently used during ChatGPT tunnel action discovery:
+Quota supports the modern stateless calls used by ChatGPT tunnel action discovery:
 
 ```text
 server/discover
@@ -119,21 +127,31 @@ tools/list
 tools/call
 ```
 
-with protocol version `2026-07-28`.
+with protocol version:
 
-If your provider advertises UI resources in tool `_meta`, Quota strips that provider-specific UI metadata by default. This keeps action-only connectors from failing on resources that Quota does not proxy.
+```text
+2026-07-28
+```
+
+Provider-specific UI metadata is stripped from the exported action catalog by default. This prevents tool scans from trying to load UI resources that Quota does not proxy.
 
 ## Claude and other MCP clients
 
-Quota exposes standard Streamable HTTP MCP. Any MCP client that can reach the relay URL and send the configured bearer token can use the tools.
+Quota exposes Streamable HTTP MCP.
 
-For a cloud client, expose the relay through a stable HTTPS endpoint or another supported secure tunnel. For a local client, `http://127.0.0.1:8787/mcp` is enough.
+Any compatible client that can reach the relay URL and provide the configured bearer token can use the exposed tools.
 
-Quota is transport infrastructure; it does not require the provider behind it to be Desktop Commander.
+For a local client:
+
+```text
+http://127.0.0.1:8787/mcp
+```
+
+For a remote/cloud client, put Quota behind a stable HTTPS endpoint or supported secure tunnel.
 
 ## Direct HTTPS + OAuth
 
-If you expose Quota directly on a stable HTTPS hostname, enable OAuth:
+If you expose Quota directly on a stable HTTPS hostname, OAuth mode is built in.
 
 ```bash
 export QUOTA_PUBLIC_URL=https://mcp.example.com
@@ -141,31 +159,60 @@ export QUOTA_OAUTH_OWNER_SECRET="$(openssl rand -hex 32)"
 export QUOTA_OAUTH_STATE_PATH="$HOME/.local/state/quota/oauth.json"
 ```
 
-Then start the relay with `QUOTA_DEVICE_TOKEN` as usual.
+The OAuth implementation supports:
 
-The authorization flow supports DCR, PKCE, access tokens, refresh tokens, revocation, and persistent client/token state.
+- Protected Resource Metadata
+- Authorization Server Metadata
+- Dynamic Client Registration
+- PKCE
+- access tokens
+- refresh tokens
+- token revocation
+- persistent OAuth client/token state
+- a built-in authorization consent page
+
+## What is already proven
+
+Quota currently has automated coverage for:
+
+- agent registration
+- tool discovery
+- tool calls
+- modern ChatGPT `2026-07-28` discovery/list/call
+- normal Streamable HTTP clients
+- provider UI metadata sanitization
+- OAuth discovery
+- Dynamic Client Registration
+- PKCE
+- access-token exchange
+- refresh tokens
+- authenticated MCP calls
+
+A real Desktop Commander provider was also tested through the standalone generic Quota agent and exposed all 26 tools through the relay.
 
 ## Agent configuration
 
-Instead of passing the provider after `--`, you can use environment variables:
+Instead of passing the MCP command after `--`, configure it with environment variables:
 
 ```bash
 export QUOTA_MCP_COMMAND=node
 export QUOTA_MCP_ARGS_JSON='["/path/to/server.js"]'
 export QUOTA_MCP_ENV_JSON='{"EXAMPLE":"value"}'
+
 node dist/agent/agent.js
 ```
 
-## Security model
+## Security
 
-Quota uses two independent credentials:
+Quota deliberately bridges remote AI clients to tools running on another machine.
 
-- `QUOTA_DEVICE_TOKEN`: agent -> relay
-- `QUOTA_MCP_TOKEN`: MCP client/tunnel -> relay
+Use it like infrastructure, not like a toy:
 
-Never make them the same secret.
-
-The agent connects outbound to the relay. The machine does not need an inbound port.
+- keep device and client credentials separate
+- never commit secrets
+- bind the relay to `127.0.0.1` unless you intentionally expose it
+- use stable HTTPS/OAuth or a trusted secure tunnel for remote access
+- only expose MCP tools you are comfortable invoking remotely
 
 See [SECURITY.md](SECURITY.md).
 
@@ -175,22 +222,11 @@ See [SECURITY.md](SECURITY.md).
 npm test
 ```
 
-The test suite covers:
-
-- device registration
-- tool discovery
-- stateless modern ChatGPT discovery/list/call
-- legacy Streamable HTTP client compatibility
-- provider UI metadata stripping
-- OAuth discovery
-- DCR
-- PKCE
-- refresh tokens
-- authenticated MCP calls
-
 ## Status
 
-Quota is an early working prototype. The protocol path is proven, but installation and multi-device UX still need productization.
+Quota is an early working prototype.
+
+The transport and authentication paths are proven. The next focus is making installation, tunnel setup, service management, and multi-device support much easier.
 
 ## License
 
