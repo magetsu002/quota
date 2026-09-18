@@ -171,12 +171,6 @@ The test suite covers the CLI, relay, modern ChatGPT discovery/list/call, normal
 
 The standalone Quota agent has also been verified with Desktop Commander, exposing all 26 tools through the relay.
 
-## Status
-
-Quota is an early working prototype. The core relay, agent, authentication, ChatGPT tunnel compatibility, and OAuth paths are working.
-
-Next focus: easier tunnel setup, service management, and multi-device UX.
-
 ## License
 
 MIT
