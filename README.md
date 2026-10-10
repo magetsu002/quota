@@ -8,7 +8,7 @@
 
 No Quota-imposed monthly tool-call limit. No separate hosted remote-bridge subscription.
 
-Desktop Commander works out of the box, but Quota can expose **any stdio MCP server**.
+Desktop Commander v0.2.52 works out of the box, but Quota can expose **any stdio MCP server**.
 
 ## Start in three commands
 
@@ -150,6 +150,12 @@ export QUOTA_OAUTH_STATE_PATH="$HOME/.local/state/quota/oauth.json"
 
 The OAuth path supports DCR, PKCE, access tokens, refresh tokens, revocation, and persistent client/token state.
 
+## Reliability
+
+Quota detects local MCP provider failures and stops advertising the disconnected agent.
+Queued calls are discarded on timeout or reconnection rather than replayed. **An interrupted
+command may already have executed**; verify its effect before retrying manually.
+
 ## Security
 
 Quota gives remote MCP clients access to tools running on your machine.
@@ -157,6 +163,7 @@ Quota gives remote MCP clients access to tools running on your machine.
 - keep the relay on `127.0.0.1` unless you intentionally expose it
 - keep the agent and MCP client credentials separate
 - never commit credentials or OAuth state
+- internal `QUOTA_*` variables are not inherited by local MCP providers; explicitly pass any provider-specific secrets
 - only expose tools you are comfortable invoking remotely
 
 See [SECURITY.md](SECURITY.md).
@@ -167,7 +174,7 @@ See [SECURITY.md](SECURITY.md).
 npm test
 ```
 
-The test suite covers the CLI, relay, modern ChatGPT discovery/list/call, normal Streamable HTTP, tool calls, provider metadata sanitization, and OAuth.
+The test suite covers the CLI, credential isolation, provider crashes, queued-call cleanup, reconnect handling, modern ChatGPT discovery/list/call, normal Streamable HTTP, and OAuth.
 
 The standalone Quota agent has also been verified with Desktop Commander, exposing all 26 tools through the relay.
 
