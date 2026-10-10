@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { providerEnvironment } from './environment.js';
 
 type RelayCall = {
     id: string;
@@ -61,7 +62,7 @@ function providerCommand(): ProviderCommand {
     if (!command) {
         return {
             command: 'npx',
-            args: ['-y', '@wonderwhy-er/desktop-commander@0.2.50'],
+            args: ['-y', '@wonderwhy-er/desktop-commander@0.2.52'],
             env: {
                 npm_config_loglevel: 'error',
                 npm_config_update_notifier: 'false',
@@ -77,14 +78,6 @@ function providerCommand(): ProviderCommand {
     };
 }
 
-function childEnv(extra?: Record<string, string>): Record<string, string> {
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-        if (typeof value === 'string') env[key] = value;
-    }
-    return { ...env, ...(extra || {}) };
-}
-
 class QuotaAgent {
     private readonly provider = providerCommand();
     private readonly client = new Client(
@@ -93,6 +86,8 @@ class QuotaAgent {
     );
     private transport?: StdioClientTransport;
     private running = true;
+    private providerFailed = false;
+    private pollAbort?: AbortController;
     private deviceId = '';
 
     private async request(route: string, init: RequestInit = {}): Promise<Response> {
@@ -188,9 +183,12 @@ class QuotaAgent {
     }
 
     private async poll(): Promise<void> {
+        this.pollAbort = new AbortController();
         const response = await this.request(
-            `/device/next?device_id=${encodeURIComponent(this.deviceId)}`
+            `/device/next?device_id=${encodeURIComponent(this.deviceId)}`,
+            { signal: this.pollAbort.signal }
         );
+        this.pollAbort = undefined;
 
         if (response.status === 404) {
             await this.register();
@@ -209,6 +207,7 @@ class QuotaAgent {
             if (!this.running) return;
             console.log(`\n[agent] ${signal}; shutting down`);
             this.running = false;
+            this.pollAbort?.abort();
         };
         process.on('SIGINT', () => stop('SIGINT'));
         process.on('SIGTERM', () => stop('SIGTERM'));
@@ -228,8 +227,15 @@ class QuotaAgent {
         this.transport = new StdioClientTransport({
             command: this.provider.command,
             args: this.provider.args,
-            env: childEnv(this.provider.env)
+            env: providerEnvironment(process.env, this.provider.env)
         });
+        this.client.onclose = () => {
+            if (this.running) {
+                console.error('[agent] Local MCP provider disconnected');
+                this.providerFailed = true;
+                this.pollAbort?.abort();
+            }
+        };
         await this.client.connect(this.transport);
         await this.register();
 
@@ -239,13 +245,29 @@ class QuotaAgent {
             try {
                 await this.poll();
             } catch (error: any) {
-                if (!this.running) break;
+                if (!this.running || this.providerFailed) break;
                 console.error('[agent] Relay connection error:', error?.message || error);
                 await new Promise(resolve => setTimeout(resolve, RETRY_MS));
             }
+            if (this.providerFailed) break;
+        }
+
+        if (this.providerFailed) {
+            try {
+                await this.request('/device/offline', {
+                    method: 'POST',
+                    body: JSON.stringify({ device_id: this.deviceId })
+                });
+            } catch {
+                // The server may also be unreachable; stale-device expiry remains the fallback.
+            }
+            this.running = false;
         }
 
         await this.client.close();
+        if (this.providerFailed) {
+            throw new Error('Local MCP provider disconnected; restart required');
+        }
     }
 }
 
