@@ -7,6 +7,7 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { providerEnvironment } from './environment.js';
+import { readProviderState, PROVIDER_PACKAGE } from '../provider/state.js';
 
 type RelayCall = {
     id: string;
@@ -62,7 +63,7 @@ function providerCommand(): ProviderCommand {
     if (!command) {
         return {
             command: 'npx',
-            args: ['-y', '@wonderwhy-er/desktop-commander@0.2.52'],
+            args: ['-y', PROVIDER_PACKAGE + '@' + readProviderState().active],
             env: {
                 npm_config_loglevel: 'error',
                 npm_config_update_notifier: 'false',
