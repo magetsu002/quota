@@ -221,8 +221,22 @@ try {
     assert.equal(refreshResponse.status, 200, refreshText);
     const refreshed = JSON.parse(refreshText);
     assert.ok(refreshed.access_token);
+    assert.ok(refreshed.refresh_token);
+    assert.notEqual(refreshed.refresh_token, tokens.refresh_token);
 
-    console.log('PASS Quota OAuth relay: discovery + PKCE + refresh + MCP round-trip');
+    const reusedRefresh = await fetch(metadata.token_endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            client_id: clientInfo.client_id,
+            refresh_token: tokens.refresh_token,
+            resource: mcpUrl
+        })
+    });
+    assert.notEqual(reusedRefresh.status, 200, 'previous refresh token must be invalid after rotation');
+
+    console.log('PASS Quota OAuth relay: discovery + PKCE + refresh rotation + MCP round-trip');
     fakeRunning = false;
     fakeAbort.abort();
     await devicePromise;
