@@ -47,7 +47,14 @@ export function manageProviderTimer(action: 'enable' | 'disable' | 'status'): vo
     }
 
     const cli = fileURLToPath(new URL('../cli.js', import.meta.url));
-    const npmPath = process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+    const npmPath = Array.from(new Set([
+        path.dirname(process.execPath),
+        ...(process.env.PATH || '/usr/local/bin:/usr/bin:/bin')
+            .split(path.delimiter)
+            .filter(segment => !segment.includes('/.npm/_npx/') &&
+                !segment.includes('/node_modules/.bin') &&
+                !segment.includes('/npm/node_modules/'))
+    ])).join(path.delimiter);
     const working = path.dirname(path.dirname(cli));
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     const service = [
@@ -58,7 +65,7 @@ export function manageProviderTimer(action: 'enable' | 'disable' | 'status'): vo
         '',
         '[Service]',
         'Type=oneshot',
-        'WorkingDirectory=' + JSON.stringify(working),
+        'WorkingDirectory=' + working,
         'Environment=' + JSON.stringify('PATH=' + npmPath),
         'ExecStart=' + JSON.stringify(process.execPath) + ' ' + JSON.stringify(cli) + ' update --apply',
         'TimeoutStartSec=480',

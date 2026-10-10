@@ -43,6 +43,8 @@ try {
         const service = fs.readFileSync(path.join(temp, '.config/systemd/user/quota-provider-sync.service'), 'utf8');
         assert.match(service, /update --apply/);
         assert.match(service, /ExecStart=/);
+        assert.match(service, /^WorkingDirectory=\/[^"\n]+$/m);
+        assert.doesNotMatch(service, /\.npm\/_npx\//);
         assert.ok(service.split(String.fromCharCode(10)).length > 10, 'service unit must use real line breaks');
         assert.match(fs.readFileSync(path.join(temp, '.config/systemd/user/quota-provider-sync.timer'), 'utf8'), /OnCalendar=\*-\*-\* 04:00:00/);
         const timerText = fs.readFileSync(path.join(temp, '.config/systemd/user/quota-provider-sync.timer'), 'utf8');
