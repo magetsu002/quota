@@ -88,6 +88,7 @@ class QuotaAgent {
     private running = true;
     private providerFailed = false;
     private pollAbort?: AbortController;
+    private heartbeatTimer?: NodeJS.Timeout;
     private deviceId = '';
 
     private async request(route: string, init: RequestInit = {}): Promise<Response> {
@@ -240,6 +241,16 @@ class QuotaAgent {
         await this.register();
 
         console.log(`[agent] Connected to relay ${RELAY_URL}`);
+        // Long-running tools can block polling. Keep readiness fresh separately
+        // while the local MCP provider is connected.
+        this.heartbeatTimer = setInterval(() => {
+            if (!this.running || this.providerFailed) return;
+            this.request('/device/heartbeat', {
+                method: 'POST',
+                body: JSON.stringify({ device_id: this.deviceId })
+            }).catch(() => { /* the poll loop handles relay recovery */ });
+        }, 15_000);
+        this.heartbeatTimer.unref();
 
         while (this.running) {
             try {
@@ -251,6 +262,8 @@ class QuotaAgent {
             }
             if (this.providerFailed) break;
         }
+
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
 
         if (this.providerFailed) {
             try {
