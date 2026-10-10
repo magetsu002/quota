@@ -13,18 +13,8 @@ const relay = spawn(process.execPath, [path.join(root, 'dist/relay/server.js')],
         QUOTA_DEVICE_TOKEN: token, QUOTA_MCP_TOKEN: 'different-mcp-token' },
     stdio: ['ignore', 'pipe', 'pipe']
 });
-const agent = spawn(process.execPath, [
-    path.join(root, 'dist/agent/agent.js'), '--', process.execPath,
-    path.join(root, 'test/fixtures/crashing-provider.js')
-], {
-    cwd: root,
-    env: { ...process.env, QUOTA_RELAY_URL: base, QUOTA_DEVICE_TOKEN: token,
-        QUOTA_DEVICE_ID: 'crashing-test-provider', QUOTA_RETRY_MS: '100' },
-    stdio: ['ignore', 'pipe', 'pipe']
-});
-
+let agent;
 let stderr = '';
-agent.stderr.on('data', chunk => { stderr += String(chunk); });
 
 async function health() {
     try {
@@ -45,6 +35,17 @@ async function waitFor(predicate, limitMs) {
 }
 
 try {
+    await waitFor(async () => Boolean(await health()), 6500);
+    agent = spawn(process.execPath, [
+        path.join(root, 'dist/agent/agent.js'), '--', process.execPath,
+        path.join(root, 'test/fixtures/crashing-provider.js')
+    ], {
+        cwd: root,
+        env: { ...process.env, QUOTA_RELAY_URL: base, QUOTA_DEVICE_TOKEN: token,
+            QUOTA_DEVICE_ID: 'crashing-test-provider', QUOTA_RETRY_MS: '100' },
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+    agent.stderr.on('data', chunk => { stderr += String(chunk); });
     await waitFor(async () => (await health())?.onlineDevices?.some(d => d.tools === 1), 6500);
 
     const exited = await waitFor(() => agent.exitCode !== null, 6500);
@@ -59,6 +60,6 @@ try {
     assert.match(stderr, /provider disconnected|Local MCP provider disconnected/i);
     console.log('PASS Quota agent: provider crash clears readiness and exits nonzero');
 } finally {
-    agent.kill('SIGTERM');
+    agent?.kill('SIGTERM');
     relay.kill('SIGTERM');
 }
