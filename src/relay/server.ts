@@ -47,6 +47,7 @@ type DeviceState = {
     name: string;
     tools: any[];
     lastSeen: number;
+    ready: boolean;
     queue: RelayCall[];
     waiters: Set<() => void>;
 };
@@ -124,7 +125,19 @@ function requireMcpAuth(req: any, res: any, next: any): void {
 }
 
 function isOnline(device: DeviceState): boolean {
-    return Date.now() - device.lastSeen <= DEVICE_STALE_MS;
+    return device.ready && Date.now() - device.lastSeen <= DEVICE_STALE_MS;
+}
+
+/** Never replay calls after a provider restart or disconnect: execution might
+ * already have happened, and replaying filesystem/process commands is unsafe. */
+function failDeviceCalls(device: DeviceState, reason: string): void {
+    device.queue.length = 0;
+    for (const [id, pending] of pendingCalls) {
+        if (pending.deviceId !== device.id) continue;
+        clearTimeout(pending.timer);
+        pendingCalls.delete(id);
+        pending.reject(new Error(reason));
+    }
 }
 
 function activeDevice(): DeviceState {
@@ -152,7 +165,18 @@ function wakeDevice(device: DeviceState): void {
 }
 
 function publicToolDescriptor(tool: any): any {
-    const { _meta: _providerUiMeta, ...publicTool } = tool;
+    // The relay does not serve MCP UI resources. Remove those claims without
+    // discarding unrelated provider metadata.
+    const { _meta, ...publicTool } = tool;
+    if (_meta && typeof _meta === 'object' && !Array.isArray(_meta)) {
+        const filtered = { ..._meta };
+        delete filtered['ui/resourceUri'];
+        delete filtered['openai/outputTemplate'];
+        delete filtered['openai/widgetAccessible'];
+        delete filtered['openai/toolInvocation/invoking'];
+        delete filtered['openai/toolInvocation/invoked'];
+        if (Object.keys(filtered).length) publicTool._meta = filtered;
+    }
     return publicTool;
 }
 
@@ -162,12 +186,18 @@ function publicTools(device: DeviceState): any[] {
 
 async function dispatchTool(name: string, args: unknown, metadata: Record<string, unknown>): Promise<any> {
     const device = activeDevice();
+    if (!device.tools.some(tool => tool.name === name)) {
+        throw new Error(`Unknown tool '${name}' on device '${device.name}'`);
+    }
     const id = randomUUID();
     const call: RelayCall = { id, tool_name: name, tool_args: args ?? {}, metadata };
     return await new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             pendingCalls.delete(id);
-            reject(new Error(`Tool call '${name}' timed out after ${TOOL_TIMEOUT_MS}ms`));
+            // A timed-out call that has not been picked up must never execute.
+            const index = device.queue.findIndex(queued => queued.id === id);
+            if (index !== -1) device.queue.splice(index, 1);
+            reject(new Error(`Tool call '${name}' timed out after ${TOOL_TIMEOUT_MS}ms; execution status may be unknown`));
         }, TOOL_TIMEOUT_MS);
         pendingCalls.set(id, { deviceId: device.id, resolve, reject, timer });
         device.queue.push(call);
@@ -348,9 +378,11 @@ app.post('/device/register', requireDeviceToken, (req: any, res: any) => {
     const tools = Array.isArray(req.body?.tools) ? req.body.tools : [];
     if (!id) return res.status(400).json({ error: 'device_id is required' });
     const existing = devices.get(id);
-    const state: DeviceState = existing ?? { id, name, tools, lastSeen: Date.now(), queue: [], waiters: new Set() };
+    if (existing) failDeviceCalls(existing, 'Agent re-registered; previous call was not retried because its execution status is unknown');
+    const state: DeviceState = existing ?? { id, name, tools, lastSeen: Date.now(), ready: true, queue: [], waiters: new Set() };
     state.name = name;
     state.tools = tools;
+    state.ready = true;
     state.lastSeen = Date.now();
     devices.set(id, state);
     res.json({ ok: true, device_id: id, tools: tools.length });
@@ -358,7 +390,20 @@ app.post('/device/register', requireDeviceToken, (req: any, res: any) => {
 
 app.post('/device/heartbeat', requireDeviceToken, (req: any, res: any) => {
     try {
-        touch(String(req.body?.device_id || ''));
+        const device = touch(String(req.body?.device_id || ''));
+        if (!device.ready) return res.status(409).json({ error: 'Device is not ready' });
+        res.json({ ok: true });
+    } catch (error: any) {
+        res.status(404).json({ error: error.message });
+    }
+});
+
+app.post('/device/offline', requireDeviceToken, (req: any, res: any) => {
+    try {
+        const device = touch(String(req.body?.device_id || ''));
+        device.ready = false;
+        failDeviceCalls(device, 'Local MCP provider disconnected; call was not retried');
+        wakeDevice(device);
         res.json({ ok: true });
     } catch (error: any) {
         res.status(404).json({ error: error.message });
@@ -374,6 +419,10 @@ app.get('/device/next', requireDeviceToken, async (req: any, res: any) => {
         res.status(404).json({ error: error.message });
         return;
     }
+    if (!device.ready) {
+        res.status(409).json({ error: 'Device provider is offline' });
+        return;
+    }
     if (device.queue.length > 0) {
         res.json({ call: device.queue.shift() });
         return;
@@ -385,6 +434,10 @@ app.get('/device/next', requireDeviceToken, async (req: any, res: any) => {
         device.waiters.delete(wake);
         clearTimeout(timer);
         device.lastSeen = Date.now();
+        if (!device.ready) {
+            res.status(409).json({ error: 'Device provider is offline' });
+            return;
+        }
         res.json({ call: device.queue.shift() ?? null });
     };
     const wake = () => finish();
