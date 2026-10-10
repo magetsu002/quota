@@ -10,7 +10,7 @@ No Quota-imposed monthly tool-call limit. No separate hosted remote-bridge subsc
 
 Desktop Commander v0.2.52 works out of the box, but Quota can expose **any stdio MCP server**.
 
-## Start in three commands
+## Start in four commands
 
 ```bash
 git clone https://github.com/magetsu002/quota.git
@@ -137,6 +137,8 @@ npm start
 npm run --silent status
 npm run --silent token
 ```
+
+See [Provider synchronization](docs/provider-sync.md) for automatic upstream updates, canary testing and rollback.
 
 ## Direct HTTPS + OAuth
 

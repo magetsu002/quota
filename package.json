@@ -16,12 +16,15 @@
   "scripts": {
     "prepare": "npm run build",
     "build": "tsc",
-    "test": "npm run build && node test/cli.test.js && node test/environment.test.js && node test/relay.test.js && node test/reliability.test.js && node test/provider-crash.test.js && node test/oauth.test.js",
+    "test": "npm run build && node test/cli.test.js && node test/environment.test.js && node test/provider-sync.test.js && node test/relay.test.js && node test/reliability.test.js && node test/provider-crash.test.js && node test/oauth.test.js",
     "start": "node dist/cli.js start",
     "relay": "node dist/cli.js relay",
     "agent": "node dist/cli.js agent",
     "status": "node dist/cli.js status",
     "token": "node dist/cli.js token",
+    "update": "node dist/cli.js update",
+    "updates": "node dist/cli.js updates",
+    "rollback": "node dist/cli.js rollback",
     "dev:relay": "tsx src/relay/server.ts",
     "dev:agent": "tsx src/agent/agent.ts"
   },

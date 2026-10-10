@@ -6,6 +6,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readProviderState } from './provider/state.js';
+import { rollbackProvider, syncProvider } from './provider/sync.js';
+import { manageProviderTimer } from './provider/timer.js';
 
 type QuotaConfig = {
     deviceToken: string;
@@ -209,6 +212,7 @@ async function status(config: QuotaConfig): Promise<number> {
         const agents = Array.isArray(body.onlineDevices) ? body.onlineDevices : [];
 
         console.log(`Relay:    online (${url})`);
+        console.log('Provider: Desktop Commander ' + readProviderState().active + ' (configured)');
         if (agents.length === 0) {
             console.log('Agent:    none connected');
         } else {
@@ -234,6 +238,11 @@ Usage:
   quota status                     Show relay/agent status
   quota token                      Print the MCP client token
   quota init                       Create local config/secrets
+  quota update --check             Check npm for newer Desktop Commander
+  quota update                     Canary-test and stage a newer provider
+  quota update --apply             Canary-test, activate, verify, rollback on failure
+  quota rollback [--apply]         Stage or activate a prior provider version
+  quota updates enable|disable|status  Manage automatic updates (Linux)
   quota help                       Show this help
 
 Default provider:
@@ -264,6 +273,38 @@ async function main(): Promise<number> {
             return 0;
         case 'status':
             return await status(config);
+        case 'update': {
+            const args = process.argv.slice(3);
+            if (args.some(arg => !['--check', '--apply'].includes(arg))) {
+                throw new Error('Usage: quota update [--check|--apply]');
+            }
+            if (args.includes('--check') && args.includes('--apply')) {
+                throw new Error('--check and --apply are mutually exclusive');
+            }
+            if (process.env.QUOTA_MCP_COMMAND) {
+                throw new Error('Provider sync only manages the default Desktop Commander provider');
+            }
+            await syncProvider({
+                host: config.relayHost, port: config.relayPort, mcpToken: config.mcpToken
+            }, args.includes('--check') ? 'check' : args.includes('--apply') ? 'apply' : 'stage');
+            return 0;
+        }
+        case 'rollback': {
+            const args = process.argv.slice(3);
+            if (args.some(arg => arg !== '--apply')) throw new Error('Usage: quota rollback [--apply]');
+            await rollbackProvider({
+                host: config.relayHost, port: config.relayPort, mcpToken: config.mcpToken
+            }, args.includes('--apply'));
+            return 0;
+        }
+        case 'updates': {
+            const action = process.argv[3];
+            if (!['enable', 'disable', 'status'].includes(action) || process.argv.length !== 4) {
+                throw new Error('Usage: quota updates enable|disable|status');
+            }
+            manageProviderTimer(action as 'enable' | 'disable' | 'status');
+            return 0;
+        }
         case 'relay':
             return await runRelay(config);
         case 'agent':
