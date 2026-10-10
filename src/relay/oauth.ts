@@ -166,6 +166,9 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
         if (requestedScopes.some(scope => !record.scopes.includes(scope))) {
             throw new InvalidGrantError('Refresh request widened the granted scope');
         }
+        // Rotate the refresh credential atomically in the persisted token set.
+        // A stolen or reused old refresh token must not remain valid.
+        this.refreshTokens.delete(refreshToken);
         return this.issueTokens(client.client_id, requestedScopes, resource ?? record.resource);
     }
 
@@ -185,9 +188,11 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
         };
     }
 
-    async revokeToken(_client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
-        this.accessTokens.delete(request.token);
-        this.refreshTokens.delete(request.token);
+    async revokeToken(client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
+        const access = this.accessTokens.get(request.token);
+        const refresh = this.refreshTokens.get(request.token);
+        if (access?.clientId === client.client_id) this.accessTokens.delete(request.token);
+        if (refresh?.clientId === client.client_id) this.refreshTokens.delete(request.token);
         this.saveState();
     }
 

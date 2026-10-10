@@ -16,7 +16,7 @@
   "scripts": {
     "prepare": "npm run build",
     "build": "tsc",
-    "test": "npm run build && node test/cli.test.js && node test/relay.test.js && node test/oauth.test.js",
+    "test": "npm run build && node test/cli.test.js && node test/environment.test.js && node test/relay.test.js && node test/reliability.test.js && node test/provider-crash.test.js && node test/oauth.test.js",
     "start": "node dist/cli.js start",
     "relay": "node dist/cli.js relay",
     "agent": "node dist/cli.js agent",
