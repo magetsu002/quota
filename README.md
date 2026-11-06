@@ -140,6 +140,18 @@ npm run --silent token
 
 See [Provider synchronization](docs/provider-sync.md) for automatic upstream updates, canary testing and rollback.
 
+## Agent Relay (experimental)
+
+Quota now has an **opt-in persistent agent task mailbox** alongside the existing
+machine-tool relay. Each conversation/agent uses a distinct bearer token and
+can exchange addressed assignments, acknowledgements, results, and event history
+through a separate `/agent-relay/mcp` endpoint.
+
+**Important:** MCP messages do not wake idle ChatGPT conversations. Automatic
+resumption of arbitrary existing ChatGPT chats is **not implemented or verified**.
+See [Agent Relay setup, security, architectural decision and test boundaries](docs/agent-relay.md)
+before configuring it.
+
 ## Direct HTTPS + OAuth
 
 If you expose Quota directly on a stable HTTPS hostname, OAuth is built in.

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
 import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { SingleUserOAuthProvider } from './oauth.js';
+import { AgentRelay, agentTools, relayToolResult, type RelayActor } from './agent-relay.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 const PORT = Number.parseInt(process.env.QUOTA_RELAY_PORT || '8787', 10);
@@ -21,6 +22,21 @@ const TARGET_DEVICE_ID = process.env.QUOTA_TARGET_DEVICE_ID || '';
 const DEVICE_STALE_MS = Number.parseInt(process.env.QUOTA_DEVICE_STALE_MS || '60000', 10);
 const TOOL_TIMEOUT_MS = Number.parseInt(process.env.QUOTA_TOOL_TIMEOUT_MS || '300000', 10);
 const LONG_POLL_MS = Number.parseInt(process.env.QUOTA_LONG_POLL_MS || '25000', 10);
+const AGENT_RELAY_CONFIG = process.env.QUOTA_AGENT_RELAY_CONFIG_PATH || '';
+const AGENT_RELAY_STATE = process.env.QUOTA_AGENT_RELAY_STATE_PATH || '';
+if (Boolean(AGENT_RELAY_CONFIG) !== Boolean(AGENT_RELAY_STATE)) {
+    throw new Error('Agent relay requires both CONFIG_PATH and STATE_PATH');
+}
+const agentRelay = AGENT_RELAY_CONFIG
+    ? await AgentRelay.load(AGENT_RELAY_CONFIG, AGENT_RELAY_STATE)
+    : undefined;
+// No relay identity may reuse the credential granting machine-control tools.
+for (const token of [process.env.QUOTA_MCP_TOKEN, process.env.QUOTA_DEVICE_TOKEN]) {
+    if (token && agentRelay?.agents.some(a => a.token_sha256 === createHash('sha256').update(token).digest('hex'))) {
+        throw new Error('Agent relay token must not reuse Quota MCP or device credentials');
+    }
+}
+
 
 if (Boolean(PUBLIC_URL) !== Boolean(OAUTH_OWNER_SECRET)) {
     throw new Error('QUOTA_PUBLIC_URL and QUOTA_OAUTH_OWNER_SECRET must be configured together');
@@ -464,6 +480,93 @@ app.post('/device/result', requireDeviceToken, (req: any, res: any) => {
     if (req.body?.status === 'completed') pending.resolve(req.body.result);
     else pending.reject(new Error(String(req.body?.error || 'Remote tool failed')));
     res.json({ ok: true });
+});
+
+// This endpoint is separate from /mcp: relay-agent credentials cannot invoke
+// Desktop Commander or any other machine-control MCP provider.
+function requireAgentRelayAuth(req: any, res: any, next: any): void {
+    if (!agentRelay) {
+        res.status(404).json({ error: 'Agent relay is disabled' });
+        return;
+    }
+    const actor = agentRelay.authenticate(bearer(req));
+    if (!actor) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+    }
+    req.agentRelayActor = actor;
+    next();
+}
+
+async function agentModernRequest(req: any, res: any, actor: RelayActor): Promise<boolean> {
+    if (!isModernSelfContainedRequest(req) || !agentRelay) return false;
+    const id = req.body?.id ?? null;
+    const method = req.body?.method;
+    if (method === 'server/discover') {
+        sendModernResult(res, id, {
+            supportedVersions: [MODERN_PROTOCOL_VERSION, '2025-11-25', '2025-06-18', '2025-03-26'],
+            capabilities: { tools: {} },
+            ttlMs: 0,
+            cacheScope: 'private',
+            _meta: { 'io.modelcontextprotocol/serverInfo': { name: 'quota-agent-relay', version: '0.1.0' } }
+        });
+    } else if (method === 'tools/list') {
+        sendModernResult(res, id, { tools: agentTools });
+    } else if (method === 'tools/call') {
+        try {
+            const result = relayToolResult(await agentRelay.call(
+                actor, String(req.body?.params?.name || ''), req.body?.params?.arguments ?? {}
+            ));
+            sendModernResult(res, id, result);
+        } catch (error: any) {
+            sendModernError(res, id, -32603, error?.message || 'Agent relay tool failed');
+        }
+    } else if (method === 'ping') {
+        sendModernResult(res, id, {});
+    } else {
+        sendModernError(res, id, -32601, `Method not found: ${String(method || '')}`);
+    }
+    return true;
+}
+
+function agentProtocolServer(actor: RelayActor): Server {
+    const server = new Server(
+        { name: 'quota-agent-relay', version: '0.1.0' },
+        { capabilities: { tools: {} }, instructions: 'Durable task exchange only. Queuing does not activate ChatGPT conversations.' }
+    );
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: agentTools }));
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+        try {
+            const result = await agentRelay!.call(actor, request.params.name, request.params.arguments ?? {});
+            return relayToolResult(result);
+        } catch (error: any) {
+            return { content: [{ type: 'text' as const, text: String(error?.message || error) }], isError: true };
+        }
+    });
+    return server;
+}
+
+app.options('/agent-relay/mcp', (_req: any, res: any) => res.status(204).send());
+app.post('/agent-relay/mcp', requireAgentRelayAuth, async (req: any, res: any) => {
+    const actor = req.agentRelayActor as RelayActor;
+    try {
+        if (await agentModernRequest(req, res, actor)) return;
+        const server = agentProtocolServer(actor);
+        const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+            enableJsonResponse: true
+        });
+        await server.connect(transport);
+        res.on('close', () => { transport.close().catch(() => undefined); });
+        await transport.handleRequest(req, res, req.body);
+    } catch (error: any) {
+        if (!res.headersSent) {
+            res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: error?.message || 'Relay error' }, id: null });
+        }
+    }
+});
+app.get('/agent-relay/mcp', requireAgentRelayAuth, (_req: any, res: any) => {
+    res.status(405).set('Allow', 'POST, OPTIONS').send('Method Not Allowed');
 });
 
 app.options('/mcp', (_req: any, res: any) => {
