@@ -146,6 +146,17 @@ try {
     assert.equal((await run(chief, 'relay_identity')).id, 'chief');
     assert.equal((await run(qa, 'relay_identity')).id, 'qa');
 
+    const workerRegistry = await run(storage, 'relay_agents');
+    assert.deepEqual(workerRegistry.agents.map(a => a.id).sort(), ['chief', 'storage']);
+    assert.equal(workerRegistry.agents.find(a => a.id === 'chief').conversation_ref, null);
+    assert.equal(workerRegistry.agents.find(a => a.id === 'storage').conversation_ref, 'chatgpt-conversation-storage');
+    assert.equal(workerRegistry.agents.some(a => a.id === 'qa'), false);
+    const qaRegistry = await run(qa, 'relay_agents');
+    assert.deepEqual(qaRegistry.agents.map(a => a.id), ['qa']);
+    const chiefRegistry = await run(chief, 'relay_agents');
+    assert.deepEqual(chiefRegistry.agents.map(a => a.id).sort(), ['chief', 'storage']);
+    assert.equal(chiefRegistry.agents.find(a => a.id === 'storage').conversation_ref, 'chatgpt-conversation-storage');
+
     const listed = await chief.listTools();
     assert.equal(listed.tools.length, 10);
 

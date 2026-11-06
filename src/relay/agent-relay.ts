@@ -229,10 +229,20 @@ export class AgentRelay {
             case 'relay_identity':
                 return { id: actor.id, role: actor.role, conversation_ref: actor.conversation_ref ?? null, assign_to: actor.assign_to };
             case 'relay_agents':
-                return this.view(state => ({ agents: this.agents.map(a => ({
-                    id: a.id, role: a.role, conversation_ref: a.conversation_ref ?? null,
-                    status: this.agentStatus(state, a.id), connectivity: 'UNKNOWN'
-                })) }));
+                return this.view(state => ({ agents: this.agents
+                    .filter(a => a.id === actor.id ||
+                        (actor.role === 'orchestrator' && actor.assign_to.includes(a.id)) ||
+                        (actor.role === 'worker' && a.role === 'orchestrator' && a.assign_to.includes(actor.id)))
+                    .map(a => ({
+                        id: a.id,
+                        role: a.role,
+                        // Workers must not learn any other conversation references.
+                        conversation_ref: a.id === actor.id ||
+                            (actor.role === 'orchestrator' && actor.assign_to.includes(a.id))
+                            ? a.conversation_ref ?? null : null,
+                        status: this.agentStatus(state, a.id),
+                        connectivity: 'UNKNOWN'
+                    })) }));
             case 'relay_assign':
                 return this.change(draft => {
                     if (actor.role !== 'orchestrator') throw new Error('Only an orchestrator may assign work');
